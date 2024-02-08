@@ -15,6 +15,15 @@ options:
         description: Name of the plugin
         required: true
         choices: ['oddbit.kubernetes.kubenodes']
+    group_by_role:
+        type: boolean
+        description: Create groups based on node roles
+        required: false
+        default: false
+    node_selectors:
+        type: dict
+        description: Labels limiting the discovered nodes
+        required: false
     group:
         type: str
         description: Add nodes to named group
@@ -91,19 +100,38 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
         self._read_config_data(path)
 
         group_name = None
-        if self.has_option("group"):
+        if self.has_option("group") and self.get_option("group"):
             group_name = self.get_option("group")
-            if group_name:
-                self.inventory.add_group(group_name)
-                if self.has_option("group_vars"):
-                    for name, value in self.get_option("group_vars").items():
-                        self.inventory.set_variable(group_name, name, value)
+            self.inventory.add_group(group_name)
+            if self.has_option("group_vars"):
+                for name, value in self.get_option("group_vars").items():
+                    self.inventory.set_variable(group_name, name, value)
 
-        nodes = self._v1.list_node()
+        label_selector=None
+        if self.has_option("node_selectors") and self.get_option("node_selectors"):
+            selectors = []
+            for label, val in self.get_option("node_selectors").items():
+                selectors.append(f"{label}={val if val else ''}")
+
+            label_selector=','.join(selectors)
+
+        nodes = self._v1.list_node(label_selector=label_selector)
         hostvars = {}
         for node in nodes.items:
             name = node.metadata.name
             self.inventory.add_host(name, group=group_name)
+
+            if self.get_option('group_by_role'):
+                for label in node.metadata.labels:
+                    if not label.startswith('node-role.kubernetes.io/'):
+                        continue
+
+                    role = label.split('/')[1].replace('-', '_')
+                    role_name = f'node_role_{role}'
+                    if role_name not in self.inventory.groups:
+                        self.inventory.add_group(role_name)
+
+                    self.inventory.groups[role_name].add_host(self.inventory.hosts[name])
 
             if hasattr(node.status, 'addresses'):
                 try:
