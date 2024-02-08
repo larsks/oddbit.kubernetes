@@ -1,0 +1,12 @@
+namespace: oddbit
+name: kubernetes
+version: 0.1.0
+authors:
+- Lars Kellogg-Stedman <lars@oddbit.com>
+readme: README.md
+
+description: Generate an Ansible inventory from Kubernetes nodes
+license:
+- GPL-3.0-or-later
+repository: https://github.com/larsks/oddbit.kubernetes
+issues: https://github.com/larsks/oddbit.kubernetes/issues
